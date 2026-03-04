@@ -1,0 +1,92 @@
+// lib/db/controllers/sessionController.ts
+// Handles all Session and Message DB operations
+
+import { prisma } from "../client";
+
+// ── Session: Create ──────────────────────────────────────────────────────────
+
+export async function createSession(data: { userId?: string; title?: string }) {
+  return prisma.session.create({
+    data,
+    include: { messages: true, analyses: true },
+  });
+}
+
+// ── Session: Read ────────────────────────────────────────────────────────────
+
+export async function getSessionById(id: string) {
+  return prisma.session.findUnique({
+    where: { id },
+    include: {
+      messages: { orderBy: { createdAt: "asc" } },
+      analyses: { orderBy: { createdAt: "asc" } },
+    },
+  });
+}
+
+export async function getSessionsByUser(userId: string) {
+  return prisma.session.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      _count: { select: { messages: true, analyses: true } },
+      messages: { take: 1, orderBy: { createdAt: "asc" } }, // First message as preview
+    },
+  });
+}
+
+export async function getAllSessions() {
+  return prisma.session.findMany({
+    orderBy: { updatedAt: "desc" },
+    include: { _count: { select: { messages: true, analyses: true } } },
+  });
+}
+
+// ── Session: Update ──────────────────────────────────────────────────────────
+
+export async function updateSessionTitle(id: string, title: string) {
+  return prisma.session.update({ where: { id }, data: { title } });
+}
+
+// ── Session: Delete ──────────────────────────────────────────────────────────
+
+export async function deleteSession(id: string) {
+  return prisma.session.delete({ where: { id } }); // Cascades to messages + analyses
+}
+
+// ── Message: Create ──────────────────────────────────────────────────────────
+
+export async function addMessage(data: {
+  sessionId: string;
+  role: "user" | "assistant";
+  content: string;
+}) {
+  // Also update the session's updatedAt timestamp
+  await prisma.session.update({
+    where: { id: data.sessionId },
+    data: { updatedAt: new Date() },
+  });
+
+  return prisma.message.create({ data });
+}
+
+// ── Message: Read ────────────────────────────────────────────────────────────
+
+export async function getMessagesBySession(sessionId: string) {
+  return prisma.message.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+// ── Message: Bulk insert (for syncing full conversation) ─────────────────────
+
+export async function bulkAddMessages(
+  sessionId: string,
+  messages: { role: "user" | "assistant"; content: string }[]
+) {
+  return prisma.message.createMany({
+    data: messages.map((m) => ({ ...m, sessionId })),
+    skipDuplicates: true,
+  });
+}
