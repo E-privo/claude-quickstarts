@@ -1,0 +1,88 @@
+// lib/db/controllers/analysisController.ts
+// Handles all saved Chart/Analysis DB operations
+
+import { prisma } from "../client";
+
+// Supported chart types (matches the existing app's chart types)
+export type ChartType =
+  | "line"
+  | "bar"
+  | "multi-bar"
+  | "area"
+  | "stacked-area"
+  | "pie";
+
+// ── Create ───────────────────────────────────────────────────────────────────
+
+export async function saveAnalysis(data: {
+  sessionId: string;
+  chartType: ChartType;
+  chartData: object; // The full chart config/data object — stored as JSON string
+  title?: string;
+  insight?: string;
+}) {
+  return prisma.analysis.create({
+    data: {
+      sessionId: data.sessionId,
+      chartType: data.chartType,
+      chartData: JSON.stringify(data.chartData),
+      title: data.title,
+      insight: data.insight,
+    },
+  });
+}
+
+// ── Read ─────────────────────────────────────────────────────────────────────
+
+export async function getAnalysisById(id: string) {
+  const analysis = await prisma.analysis.findUnique({ where: { id } });
+  if (!analysis) return null;
+
+  return {
+    ...analysis,
+    chartData: JSON.parse(analysis.chartData), // Deserialize back to object
+  };
+}
+
+export async function getAnalysesBySession(sessionId: string) {
+  const analyses = await prisma.analysis.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return analyses.map((a) => ({
+    ...a,
+    chartData: JSON.parse(a.chartData),
+  }));
+}
+
+export async function getAllAnalyses() {
+  const analyses = await prisma.analysis.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { session: { select: { id: true, title: true } } },
+  });
+
+  return analyses.map((a) => ({
+    ...a,
+    chartData: JSON.parse(a.chartData),
+  }));
+}
+
+// ── Update ───────────────────────────────────────────────────────────────────
+
+export async function updateAnalysis(
+  id: string,
+  data: { title?: string; insight?: string }
+) {
+  return prisma.analysis.update({ where: { id }, data });
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+
+export async function deleteAnalysis(id: string) {
+  return prisma.analysis.delete({ where: { id } });
+}
+
+export async function deleteAnalysesBySession(sessionId: string) {
+  return prisma.analysis.deleteMany({ where: { sessionId } });
+}
